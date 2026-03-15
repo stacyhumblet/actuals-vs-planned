@@ -1,0 +1,927 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Actuals vs Planned Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <style>
+    /* ── Flash prevention ─────────────────────────────────── */
+    html { background: #000; }
+    html[data-theme="light"] { background: #f0f4ff; }
+
+    /* ── Design tokens ───────────────────────────────────── */
+    :root {
+      --bg:        #0b1020;
+      --surface:   rgba(255,255,255,.055);
+      --surface2:  rgba(255,255,255,.03);
+      --border:    rgba(255,255,255,.08);
+      --text:      #e7ecff;
+      --muted:     #a7b1d6;
+      --btn:       #2d6bff;
+      --btn2:      #1a4fd6;
+      --actual:    #5a9fc2;
+      --planned:   #9b8fff;
+      --good:      #1fe3a5;
+      --warn:      #ffcc66;
+      --bad:       #ff6b6b;
+    }
+    [data-theme="light"] {
+      --bg:        #f0f4ff;
+      --surface:   rgba(255,255,255,.92);
+      --surface2:  rgba(255,255,255,.75);
+      --border:    rgba(0,0,0,.09);
+      --text:      #1a2142;
+      --muted:     #5c6690;
+      --btn:       #2d6bff;
+      --btn2:      #1a4fd6;
+      --actual:    #1a6e94;
+      --planned:   #6b55d9;
+      --good:      #0ba676;
+      --warn:      #b87d00;
+      --bad:       #d93636;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background:
+        radial-gradient(1200px 700px at 20% 0%,  rgba(45,107,255,.20), transparent 60%),
+        radial-gradient(900px  600px at 80% 10%, rgba(90,159,194,.14), transparent 60%),
+        var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    [data-theme="light"] body {
+      background:
+        radial-gradient(1200px 700px at 20% 0%,  rgba(45,107,255,.07), transparent 60%),
+        radial-gradient(900px  600px at 80% 10%, rgba(90,159,194,.06), transparent 60%),
+        var(--bg);
+    }
+
+    /* ── Top bar ─────────────────────────────────────────── */
+    .topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 22px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(0,0,0,.18);
+      backdrop-filter: blur(12px);
+      position: sticky; top: 0; z-index: 20;
+      gap: 12px; flex-wrap: wrap;
+    }
+    [data-theme="light"] .topbar {
+      background: rgba(255,255,255,.82);
+      border-bottom-color: rgba(0,0,0,.08);
+    }
+    .brand { display: flex; flex-direction: column; }
+    .brand-title    { font-size: 17px; font-weight: 800; letter-spacing: .2px; }
+    .brand-subtitle { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .topbar-right   { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+    .icon-btn {
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,.04);
+      color: var(--text);
+      padding: 8px 12px;
+      border-radius: 10px;
+      font-size: 13px;
+      cursor: pointer;
+      white-space: nowrap;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .icon-btn:hover { background: rgba(255,255,255,.09); }
+    [data-theme="light"] .icon-btn { background: rgba(255,255,255,.70); }
+
+    /* ── Layout ──────────────────────────────────────────── */
+    .container {
+      width: min(1300px, calc(100% - 32px));
+      margin: 18px auto 52px;
+      display: flex; flex-direction: column; gap: 14px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 18px;
+      box-shadow: 0 8px 28px rgba(0,0,0,.22);
+    }
+    [data-theme="light"] .card { box-shadow: 0 4px 18px rgba(0,0,0,.08); }
+    .card-title    { font-weight: 800; font-size: 14px; }
+    .card-subtitle { margin-top: 4px; color: var(--muted); font-size: 12px; }
+
+    /* ── Filters ─────────────────────────────────────────── */
+    .filters-grid {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0,1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+    @media (max-width: 1000px) { .filters-grid { grid-template-columns: repeat(3,1fr); } }
+    @media (max-width: 560px)  { .filters-grid { grid-template-columns: 1fr 1fr; } }
+
+    .field label {
+      display: block;
+      color: var(--muted);
+      font-size: 10px; font-weight: 700;
+      letter-spacing: .4px; text-transform: uppercase;
+      margin-bottom: 5px;
+    }
+    select {
+      width: 100%;
+      padding: 8px 28px 8px 10px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: rgba(0,0,0,.22);
+      color: var(--text);
+      font-size: 13px;
+      outline: none; appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23a7b1d6'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      cursor: pointer;
+    }
+    select:focus { border-color: var(--btn); }
+    [data-theme="light"] select { background-color: rgba(255,255,255,.88); }
+
+    .reset-btn {
+      align-self: flex-end;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,.04);
+      color: var(--muted);
+      padding: 8px 14px;
+      border-radius: 10px;
+      font-size: 13px; cursor: pointer; white-space: nowrap;
+    }
+    .reset-btn:hover { background: rgba(255,255,255,.08); color: var(--text); }
+
+    /* ── KPI pills ───────────────────────────────────────── */
+    .kpi-row {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 10px;
+    }
+    @media (max-width: 860px) { .kpi-row { grid-template-columns: repeat(3,1fr); } }
+    @media (max-width: 520px) { .kpi-row { grid-template-columns: 1fr 1fr; } }
+
+    .kpi-pill {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px 16px;
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .kpi-pill.good { border-color: rgba(31,227,165,.35); }
+    .kpi-pill.warn { border-color: rgba(255,204,102,.35); }
+    .kpi-pill.bad  { border-color: rgba(255,107,107,.35); }
+    .kpi-label { color: var(--muted); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; }
+    .kpi-value { font-size: 22px; font-weight: 900; letter-spacing: -.5px; line-height: 1; }
+    .kpi-sub   { color: var(--muted); font-size: 11px; margin-top: 2px; }
+
+    /* ── View Toggle ─────────────────────────────────────── */
+    .view-header { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px; }
+    .view-toggle { display: flex; gap: 6px; align-items: center; }
+    .toggle-btn {
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      padding: 6px 13px;
+      border-radius: 8px;
+      font-size: 12px; font-weight: 600; cursor: pointer;
+      transition: all .15s;
+    }
+    .toggle-btn.active { background: var(--btn); border-color: var(--btn); color: #fff; }
+    .toggle-btn:not(.active):hover { background: rgba(255,255,255,.06); color: var(--text); }
+
+    /* ── Table ───────────────────────────────────────────── */
+    .table-wrap { overflow-x: auto; margin-top: 12px; }
+    table { width: 100%; border-collapse: collapse; min-width: 700px; }
+    th, td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px; text-align: left;
+    }
+    th {
+      color: var(--muted);
+      font-size: 10px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .4px; white-space: nowrap;
+      cursor: pointer; user-select: none;
+    }
+    th:hover { color: var(--text); }
+    th .sort-arrow { margin-left: 4px; opacity: .5; }
+    th.sorted .sort-arrow { opacity: 1; color: var(--btn); }
+    td.num, th.num { text-align: right; }
+    tbody tr:hover { background: rgba(255,255,255,.035); }
+    [data-theme="light"] tbody tr:hover { background: rgba(0,0,0,.025); }
+
+    /* ── Variance bar (table) ────────────────────────────── */
+    .var-bar-row { display: flex; align-items: center; gap: 8px; }
+    .var-track {
+      flex: 1; height: 6px;
+      background: var(--border);
+      border-radius: 4px; overflow: hidden; position: relative;
+      min-width: 60px;
+    }
+    .var-fill {
+      position: absolute; top: 0; bottom: 0;
+      border-radius: 4px; transition: width .4s ease;
+    }
+    .var-label { font-size: 12px; font-weight: 800; min-width: 54px; text-align: right; white-space: nowrap; }
+
+    /* ── Status badge ────────────────────────────────────── */
+    .status-badge {
+      font-size: 10px; font-weight: 800;
+      padding: 3px 8px; border-radius: 6px; white-space: nowrap;
+    }
+    .status-good { background: rgba(31,227,165,.15); color: var(--good); }
+    .status-warn { background: rgba(255,204,102,.18); color: var(--warn); }
+    .status-bad  { background: rgba(255,107,107,.15); color: var(--bad);  }
+
+    /* ── Period chip ─────────────────────────────────────── */
+    .period-chip {
+      font-size: 11px; font-weight: 700;
+      color: var(--muted);
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 2px 8px; white-space: nowrap;
+    }
+
+    /* ── Chart ───────────────────────────────────────────── */
+    .chart-wrap { position: relative; margin-top: 12px; height: 380px; }
+
+    /* ── Legend ──────────────────────────────────────────── */
+    .legend { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
+    .legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); }
+    .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .legend-line { width: 18px; height: 3px; border-radius: 2px; flex-shrink: 0; }
+
+    /* ── Colors ──────────────────────────────────────────── */
+    .good  { color: var(--good); }
+    .warn  { color: var(--warn); }
+    .bad   { color: var(--bad); }
+    .fill-good { background: var(--good); }
+    .fill-warn { background: var(--warn); }
+    .fill-bad  { background: var(--bad); }
+
+    /* ── Loading ─────────────────────────────────────────── */
+    .loading {
+      position: fixed; inset: 0; z-index: 9999;
+      background: rgba(11,16,32,.96);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 16px;
+      transition: opacity .5s;
+    }
+    [data-theme="light"] .loading { background: rgba(240,244,255,.96); }
+    .loading.fade-out { opacity: 0; pointer-events: none; }
+    .spinner {
+      width: 40px; height: 40px;
+      border: 3px solid var(--border);
+      border-top-color: var(--btn);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .load-text { color: var(--muted); font-size: 14px; font-weight: 600; }
+
+    /* ── Error ───────────────────────────────────────────── */
+    .error-box {
+      background: rgba(255,107,107,.08);
+      border: 1px solid rgba(255,107,107,.30);
+      border-radius: 12px;
+      padding: 18px 20px;
+      color: var(--bad); font-size: 14px;
+    }
+
+    /* ── Empty ───────────────────────────────────────────── */
+    .empty-row td { text-align: center; color: var(--muted); padding: 32px; font-size: 13px; }
+
+    /* ── Footer ──────────────────────────────────────────── */
+    .footer {
+      display: flex; justify-content: space-between; gap: 12px;
+      padding: 16px 24px;
+      border-top: 1px solid var(--border);
+      color: var(--muted); font-size: 12px;
+      background: rgba(0,0,0,.10); flex-wrap: wrap;
+    }
+    [data-theme="light"] .footer { background: rgba(255,255,255,.50); }
+
+    /* ── Grouping rows ───────────────────────────────────── */
+    .group-header td { background: rgba(45,107,255,.07); font-weight: 700; font-size: 12px; }
+    [data-theme="light"] .group-header td { background: rgba(45,107,255,.06); }
+    .sub-row td { padding-left: 24px; }
+  </style>
+</head>
+<body>
+
+<!-- Loading screen -->
+<div class="loading" id="loadingScreen">
+  <div class="spinner"></div>
+  <div class="load-text">Loading Actuals vs Planned…</div>
+</div>
+
+<!-- Top bar -->
+<div class="topbar">
+  <div class="brand">
+    <div class="brand-title">Actuals vs Planned</div>
+    <div class="brand-subtitle">Actual logged hours compared to planned — by period and team</div>
+  </div>
+  <div class="topbar-right">
+    <button class="icon-btn" id="refreshBtn" onclick="refreshData()">↻ Refresh</button>
+    <button class="icon-btn" id="themeBtn" onclick="toggleTheme()">☀ Light</button>
+  </div>
+</div>
+
+<div class="container" id="mainContent" style="display:none">
+
+  <!-- Filters -->
+  <div class="card">
+    <div class="card-title">Filters</div>
+    <div class="filters-grid">
+      <div class="field">
+        <label>Year</label>
+        <select id="fYear" onchange="applyFilters()"><option value="">All Years</option></select>
+      </div>
+      <div class="field">
+        <label>Month</label>
+        <select id="fMonth" onchange="applyFilters()"><option value="">All Months</option></select>
+      </div>
+      <div class="field">
+        <label>L4 Manager</label>
+        <select id="fL4" onchange="applyFilters()"><option value="">All L4</option></select>
+      </div>
+      <div class="field">
+        <label>L5 Manager</label>
+        <select id="fL5" onchange="applyFilters()"><option value="">All L5</option></select>
+      </div>
+      <div class="field">
+        <label>Group By</label>
+        <select id="fGroup" onchange="applyFilters()">
+          <option value="period">Period (Month)</option>
+          <option value="l4">L4 Manager</option>
+          <option value="l5">L5 Manager</option>
+          <option value="resource">Resource</option>
+        </select>
+      </div>
+      <div style="display:flex; align-items:flex-end;">
+        <button class="reset-btn" onclick="resetFilters()">Reset</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- KPI row -->
+  <div class="kpi-row">
+    <div class="kpi-pill">
+      <div class="kpi-label">Total Actual Hrs</div>
+      <div class="kpi-value" id="kpiActual">—</div>
+      <div class="kpi-sub">logged</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="kpi-label">Total Planned Hrs</div>
+      <div class="kpi-value" id="kpiPlanned">—</div>
+      <div class="kpi-sub">budgeted</div>
+    </div>
+    <div class="kpi-pill" id="kpiVarPill">
+      <div class="kpi-label">Variance</div>
+      <div class="kpi-value" id="kpiVariance">—</div>
+      <div class="kpi-sub">actual − planned</div>
+    </div>
+    <div class="kpi-pill" id="kpiPctPill">
+      <div class="kpi-label">% of Plan</div>
+      <div class="kpi-value" id="kpiPct">—</div>
+      <div class="kpi-sub">attainment</div>
+    </div>
+    <div class="kpi-pill">
+      <div class="kpi-label">Periods On Track</div>
+      <div class="kpi-value" id="kpiOnTrack">—</div>
+      <div class="kpi-sub">within ±10%</div>
+    </div>
+  </div>
+
+  <!-- Error box -->
+  <div class="error-box" id="errorBox" style="display:none"></div>
+
+  <!-- Main card: table + chart -->
+  <div class="card">
+    <div class="view-header">
+      <div>
+        <div class="card-title" id="cardTitle">Actuals vs Planned by Period</div>
+        <div class="card-subtitle">Variance = Actual − Planned. Green = within ±10%, Yellow = ±10–25%, Red = &gt;25% off.</div>
+      </div>
+      <div class="view-toggle">
+        <button class="toggle-btn active" id="btnTable" onclick="switchView('table')">Table</button>
+        <button class="toggle-btn"        id="btnChart" onclick="switchView('chart')">Line Chart</button>
+      </div>
+    </div>
+
+    <!-- TABLE VIEW -->
+    <div id="tableView">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th onclick="sortBy('label')" id="thLabel">Period / Group <span class="sort-arrow">↕</span></th>
+              <th class="num" onclick="sortBy('planned')" id="thPlanned">Planned Hrs <span class="sort-arrow">↕</span></th>
+              <th class="num" onclick="sortBy('actual')"  id="thActual">Actual Hrs <span class="sort-arrow">↕</span></th>
+              <th class="num" onclick="sortBy('variance')" id="thVariance">Variance <span class="sort-arrow">↕</span></th>
+              <th class="num" onclick="sortBy('pct')" id="thPct">% of Plan <span class="sort-arrow">↕</span></th>
+              <th style="min-width:140px" onclick="sortBy('pct')" id="thBar">Progress <span class="sort-arrow">↕</span></th>
+              <th onclick="sortBy('status')" id="thStatus">Status <span class="sort-arrow">↕</span></th>
+            </tr>
+          </thead>
+          <tbody id="tableBody">
+            <tr class="empty-row"><td colspan="7">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div style="margin-top:12px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+        <div class="legend">
+          <div class="legend-item"><div class="legend-dot" style="background:var(--good)"></div> Within ±10% (on track)</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--warn)"></div> ±10–25% (watch)</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--bad)"></div> &gt;25% off (attention)</div>
+        </div>
+        <div style="font-size:11px; color:var(--muted)" id="rowCountLabel"></div>
+      </div>
+    </div>
+
+    <!-- CHART VIEW -->
+    <div id="chartView" style="display:none">
+      <div class="chart-wrap">
+        <canvas id="avpChart"></canvas>
+      </div>
+      <div style="margin-top:14px; display:flex; justify-content:center; gap:20px; flex-wrap:wrap;">
+        <div class="legend-item">
+          <div class="legend-line" style="background:var(--actual)"></div>
+          Actual Hours
+        </div>
+        <div class="legend-item">
+          <div class="legend-line" style="background:var(--planned); border: 2px dashed var(--planned); height:0; border-radius:0"></div>
+          Planned Hours
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Footer -->
+<div class="footer">
+  <span>Actuals vs Planned · Source: Actuals_DummyData</span>
+  <span id="lastLoaded"></span>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────────
+let RAW       = null;
+let TABLE_DATA = [];
+let sortCol    = 'label';
+let sortAsc    = true;
+let activeView = 'table';
+let chartInst  = null;
+
+const MONTH_ORDER = ['January','February','March','April','May','June',
+                     'July','August','September','October','November','December'];
+
+// ── Theme ──────────────────────────────────────────────────────────────────────
+(function initTheme() {
+  const saved = localStorage.getItem('avp_theme') || 'dark';
+  setTheme(saved);
+})();
+
+function setTheme(t) {
+  document.documentElement.setAttribute('data-theme', t);
+  const btn = document.getElementById('themeBtn');
+  if (btn) btn.textContent = t === 'dark' ? '☀ Light' : '☾ Dark';
+  localStorage.setItem('avp_theme', t);
+  if (chartInst) rebuildChart();
+}
+function toggleTheme() {
+  const cur = document.documentElement.getAttribute('data-theme') || 'dark';
+  setTheme(cur === 'dark' ? 'light' : 'dark');
+}
+
+const API_URL = 'https://script.google.com/macros/s/AKfycbzH7nrm2fnaYPVTrH9GjBiGOxWHkWZZ8mz08J1OCbmn7b1PhVmHs5YTcAkiIvMrsJmzhQ/exec';
+
+// ── Boot ───────────────────────────────────────────────────────────────────────
+window.addEventListener('load', loadData);
+
+function loadData() {
+  showLoading(true);
+  fetch(API_URL)
+    .then(r => r.json())
+    .then(onDataLoaded)
+    .catch(onError);
+}
+
+function refreshData() {
+  const btn = document.getElementById('refreshBtn');
+  btn.textContent = '↻ Refreshing…';
+  btn.disabled = true;
+  showLoading(true);
+  fetch(API_URL)
+    .then(r => r.json())
+    .then(onDataLoaded)
+    .catch(onError);
+}
+
+function onDataLoaded(data) {
+  RAW = data;
+  document.getElementById('lastLoaded').textContent = 'Last loaded: ' + new Date().toLocaleTimeString();
+  const btn = document.getElementById('refreshBtn');
+  btn.textContent = '↻ Refresh';
+  btn.disabled = false;
+
+  populateFilters();
+  applyFilters();
+  showLoading(false);
+  document.getElementById('mainContent').style.display = '';
+}
+
+function onError(err) {
+  showLoading(false);
+  document.getElementById('mainContent').style.display = '';
+  const box = document.getElementById('errorBox');
+  box.style.display = '';
+  box.textContent = 'Error loading data: ' + (err.message || String(err));
+  const btn = document.getElementById('refreshBtn');
+  btn.textContent = '↻ Refresh';
+  btn.disabled = false;
+}
+
+function showLoading(on) {
+  const el = document.getElementById('loadingScreen');
+  if (on) { el.classList.remove('fade-out'); el.style.display = ''; }
+  else     { el.classList.add('fade-out'); setTimeout(() => { el.style.display = 'none'; }, 600); }
+}
+
+// ── Populate filters ───────────────────────────────────────────────────────────
+function populateFilters() {
+  const rows  = RAW.actualsRows;
+  const years  = [...new Set(rows.map(r => r['Year of Worklog']).filter(Boolean))].sort();
+  const months = MONTH_ORDER.filter(m => rows.some(r => r['Month of Worklog'] === m));
+  const l4s    = [...new Set(rows.map(r => r['Level 4 Mgr']).filter(Boolean))].sort();
+  const l5s    = [...new Set(rows.map(r => r['Level 5 Mgr']).filter(Boolean))].sort();
+  fillSelect('fYear',  years,  'All Years');
+  fillSelect('fMonth', months, 'All Months');
+  fillSelect('fL4',    l4s,    'All L4');
+  fillSelect('fL5',    l5s,    'All L5');
+}
+
+function fillSelect(id, values, allLabel) {
+  const sel = document.getElementById(id);
+  const cur = sel.value;
+  sel.innerHTML = `<option value="">${allLabel}</option>`;
+  values.forEach(v => {
+    const opt = document.createElement('option');
+    opt.value = v; opt.textContent = v;
+    if (v === cur) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
+function resetFilters() {
+  ['fYear','fMonth','fL4','fL5'].forEach(id => { document.getElementById(id).value = ''; });
+  document.getElementById('fGroup').value = 'period';
+  applyFilters();
+}
+
+// ── Filter + aggregate ─────────────────────────────────────────────────────────
+function applyFilters() {
+  if (!RAW) return;
+
+  const fYear  = document.getElementById('fYear').value;
+  const fMonth = document.getElementById('fMonth').value;
+  const fL4    = document.getElementById('fL4').value;
+  const fL5    = document.getElementById('fL5').value;
+  const fGroup = document.getElementById('fGroup').value;
+
+  // Filter actuals
+  let actuals = RAW.actualsRows;
+  if (fYear)  actuals = actuals.filter(r => r['Year of Worklog']  === fYear);
+  if (fMonth) actuals = actuals.filter(r => r['Month of Worklog'] === fMonth);
+  if (fL4)    actuals = actuals.filter(r => r['Level 4 Mgr']      === fL4);
+  if (fL5)    actuals = actuals.filter(r => r['Level 5 Mgr']      === fL5);
+
+  // Filter planned
+  let planned = RAW.plannedRows;
+  if (fYear)  planned = planned.filter(r => r['Year of Worklog']  === fYear  || r['Year']  === fYear);
+  if (fMonth) planned = planned.filter(r => r['Month of Worklog'] === fMonth || r['Month'] === fMonth);
+  if (fL4)    planned = planned.filter(r => !r['Level 4 Mgr'] || r['Level 4 Mgr'] === fL4);
+  if (fL5)    planned = planned.filter(r => !r['Level 5 Mgr'] || r['Level 5 Mgr'] === fL5);
+
+  // Build planned lookup: resource → year → month → planned hours
+  const plannedMap = buildPlannedMap(planned);
+
+  // Aggregate actuals by chosen group
+  const aggMap = {};
+
+  actuals.forEach(r => {
+    const res   = r['Resource Name']  || '';
+    const year  = r['Year of Worklog']  || '';
+    const month = r['Month of Worklog'] || '';
+    const l4    = r['Level 4 Mgr']    || '';
+    const l5    = r['Level 5 Mgr']    || '';
+    const hrs   = parseFloat(r['Worklog Hours']) || 0;
+
+    let key, label;
+    if (fGroup === 'period') {
+      const mIdx = MONTH_ORDER.indexOf(month);
+      const sortKey = year + String(mIdx).padStart(2,'0');
+      key   = year + '|||' + month;
+      label = month + ' ' + year;
+      if (!aggMap[key]) aggMap[key] = { label, sortKey, actual: 0, planned: 0 };
+    } else if (fGroup === 'l4') {
+      key   = l4 || '(No L4)';
+      label = key;
+      if (!aggMap[key]) aggMap[key] = { label, sortKey: label, actual: 0, planned: 0 };
+    } else if (fGroup === 'l5') {
+      key   = l5 || '(No L5)';
+      label = key;
+      if (!aggMap[key]) aggMap[key] = { label, sortKey: label, actual: 0, planned: 0 };
+    } else {
+      // resource
+      key   = res || '(Unknown)';
+      label = key;
+      if (!aggMap[key]) aggMap[key] = { label, sortKey: label, actual: 0, planned: 0 };
+    }
+
+    aggMap[key].actual += hrs;
+
+    // Add planned hours for this row's resource+period
+    const pHrs = lookupPlanned(plannedMap, res, year, month);
+    aggMap[key].planned += pHrs;
+  });
+
+  TABLE_DATA = Object.values(aggMap);
+
+  updateKPIs(TABLE_DATA);
+
+  // Update card title
+  const titles = { period: 'by Period (Month)', l4: 'by L4 Manager', l5: 'by L5 Manager', resource: 'by Resource' };
+  document.getElementById('cardTitle').textContent = 'Actuals vs Planned ' + (titles[fGroup] || '');
+
+  if (activeView === 'table') renderTable();
+  else rebuildChart();
+}
+
+// ── Planned lookup helpers ────────────────────────────────────────────────────
+function buildPlannedMap(planned) {
+  const map = {};
+  const ph  = RAW.plannedHeaders || [];
+  // Try to detect column names flexibly
+  const resCol   = detectCol(ph, ['Resource Name','Resource','resource_name','Name']);
+  const yearCol  = detectCol(ph, ['Year of Worklog','Year','year']);
+  const monthCol = detectCol(ph, ['Month of Worklog','Month','month']);
+  const hrsCol   = detectCol(ph, ['Planned Hours','Planned','planned_hours','Hours','Budget Hours']);
+
+  planned.forEach(r => {
+    const res   = resCol   ? (r[resCol]   || '').trim() : '';
+    const year  = yearCol  ? (r[yearCol]  || '').trim() : '';
+    const month = monthCol ? (r[monthCol] || '').trim() : '';
+    const hrs   = hrsCol   ? (parseFloat(r[hrsCol]) || 0) : 0;
+    if (!res && !year && !month) return; // skip blanks
+    const k = res + '|||' + year + '|||' + month;
+    map[k] = (map[k] || 0) + hrs;
+  });
+  return map;
+}
+
+function detectCol(headers, candidates) {
+  for (const c of candidates) {
+    if (headers.includes(c)) return c;
+  }
+  return null;
+}
+
+function lookupPlanned(map, res, year, month) {
+  const k = res + '|||' + year + '|||' + month;
+  return map[k] || 0;
+}
+
+// ── KPIs ───────────────────────────────────────────────────────────────────────
+function updateKPIs(rows) {
+  const totalActual  = rows.reduce((s, r) => s + r.actual,  0);
+  const totalPlanned = rows.reduce((s, r) => s + r.planned, 0);
+  const variance     = totalActual - totalPlanned;
+  const pct          = totalPlanned > 0 ? totalActual / totalPlanned : null;
+  const onTrack      = rows.filter(r => r.planned > 0 && Math.abs(r.actual / r.planned - 1) <= 0.10).length;
+
+  document.getElementById('kpiActual').textContent  = fmt(totalActual);
+  document.getElementById('kpiPlanned').textContent = fmt(totalPlanned);
+  document.getElementById('kpiVariance').textContent = (variance >= 0 ? '+' : '') + fmt(variance);
+  document.getElementById('kpiPct').textContent     = pct !== null ? (pct * 100).toFixed(1) + '%' : '—';
+  document.getElementById('kpiOnTrack').textContent = onTrack + ' / ' + rows.length;
+
+  const varPill = document.getElementById('kpiVarPill');
+  const pctPill = document.getElementById('kpiPctPill');
+  varPill.className = 'kpi-pill';
+  pctPill.className = 'kpi-pill';
+  if (pct !== null) {
+    const dev = Math.abs(pct - 1);
+    const cls = dev <= 0.10 ? 'good' : dev <= 0.25 ? 'warn' : 'bad';
+    varPill.classList.add(cls);
+    pctPill.classList.add(cls);
+    document.getElementById('kpiVariance').className = 'kpi-value ' + cls;
+    document.getElementById('kpiPct').className      = 'kpi-value ' + cls;
+  }
+}
+
+// ── Table render ───────────────────────────────────────────────────────────────
+function sortBy(col) {
+  if (sortCol === col) sortAsc = !sortAsc;
+  else { sortCol = col; sortAsc = (col === 'label'); }
+  renderTable();
+}
+
+function renderTable() {
+  // Sort
+  const sorted = [...TABLE_DATA].sort((a, b) => {
+    let va, vb;
+    if (sortCol === 'label')    { va = a.sortKey || a.label; vb = b.sortKey || b.label; }
+    else if (sortCol === 'planned')  { va = a.planned;  vb = b.planned; }
+    else if (sortCol === 'actual')   { va = a.actual;   vb = b.actual; }
+    else if (sortCol === 'variance') { va = a.actual - a.planned; vb = b.actual - b.planned; }
+    else if (sortCol === 'pct')      { va = a.planned > 0 ? a.actual/a.planned : 0; vb = b.planned > 0 ? b.actual/b.planned : 0; }
+    else if (sortCol === 'status')   { va = statusRank(a); vb = statusRank(b); }
+    else                             { va = a.label; vb = b.label; }
+    if (typeof va === 'string') return sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+    return sortAsc ? va - vb : vb - va;
+  });
+
+  // Update header arrows
+  ['Label','Planned','Actual','Variance','Pct','Status'].forEach(c => {
+    const th = document.getElementById('th' + c);
+    if (!th) return;
+    const col = c.toLowerCase();
+    th.classList.toggle('sorted', sortCol === col);
+    const arrow = th.querySelector('.sort-arrow');
+    if (arrow) arrow.textContent = (sortCol === col) ? (sortAsc ? '↑' : '↓') : '↕';
+  });
+
+  const html = sorted.map(row => {
+    const variance = row.actual - row.planned;
+    const pct      = row.planned > 0 ? row.actual / row.planned : null;
+    const dev      = pct !== null ? Math.abs(pct - 1) : null;
+    const cls      = dev === null ? '' : dev <= 0.10 ? 'good' : dev <= 0.25 ? 'warn' : 'bad';
+    const fillCls  = dev === null ? '' : dev <= 0.10 ? 'fill-good' : dev <= 0.25 ? 'fill-warn' : 'fill-bad';
+    const statusLbl = dev === null ? '—' : dev <= 0.10 ? 'On Track' : dev <= 0.25 ? 'Watch' : 'Attention';
+    const statusCls = dev === null ? '' : dev <= 0.10 ? 'status-good' : dev <= 0.25 ? 'status-warn' : 'status-bad';
+
+    // Progress bar: how much of plan is fulfilled (cap at 150%)
+    const barW = pct !== null ? Math.min(pct, 1.5) / 1.5 * 100 : 0;
+
+    return `<tr>
+      <td><span class="period-chip">${esc(row.label)}</span></td>
+      <td class="num">${fmt(row.planned)}</td>
+      <td class="num">${fmt(row.actual)}</td>
+      <td class="num ${cls}">${variance >= 0 ? '+' : ''}${fmt(variance)}</td>
+      <td class="num ${cls}">${pct !== null ? (pct * 100).toFixed(1) + '%' : '—'}</td>
+      <td>
+        <div class="var-bar-row">
+          <div class="var-track" title="${pct !== null ? (pct*100).toFixed(1)+'% of plan' : 'no planned data'}">
+            <div class="var-fill ${fillCls}" style="width:${barW.toFixed(1)}%; left:0"></div>
+          </div>
+          <span class="var-label ${cls}">${pct !== null ? (pct*100).toFixed(0)+'%' : '—'}</span>
+        </div>
+      </td>
+      <td><span class="status-badge ${statusCls}">${statusLbl}</span></td>
+    </tr>`;
+  });
+
+  const tbody = document.getElementById('tableBody');
+  tbody.innerHTML = html.length
+    ? html.join('')
+    : '<tr class="empty-row"><td colspan="7">No data matches the current filters.</td></tr>';
+
+  document.getElementById('rowCountLabel').textContent =
+    sorted.length + ' row' + (sorted.length === 1 ? '' : 's') + ' shown';
+}
+
+function statusRank(r) {
+  const pct = r.planned > 0 ? r.actual / r.planned : null;
+  if (pct === null) return 3;
+  const dev = Math.abs(pct - 1);
+  if (dev <= 0.10) return 0;
+  if (dev <= 0.25) return 1;
+  return 2;
+}
+
+// ── Chart ──────────────────────────────────────────────────────────────────────
+function switchView(view) {
+  activeView = view;
+  const showTable = view === 'table';
+  document.getElementById('tableView').style.display = showTable ? '' : 'none';
+  document.getElementById('chartView').style.display = showTable ? 'none' : '';
+  document.getElementById('btnTable').classList.toggle('active', showTable);
+  document.getElementById('btnChart').classList.toggle('active', !showTable);
+  if (!showTable) rebuildChart();
+}
+
+function rebuildChart() {
+  if (!TABLE_DATA.length) return;
+
+  const isDark  = (document.documentElement.getAttribute('data-theme') || 'dark') === 'dark';
+  const gridCol = isDark ? 'rgba(255,255,255,.07)' : 'rgba(0,0,0,.07)';
+  const textCol = isDark ? '#a7b1d6'               : '#5c6690';
+  const actualCol  = getComputedStyle(document.documentElement).getPropertyValue('--actual').trim()  || '#5a9fc2';
+  const plannedCol = getComputedStyle(document.documentElement).getPropertyValue('--planned').trim() || '#9b8fff';
+
+  // Sort by sortKey for chart x-axis
+  const sorted = [...TABLE_DATA].sort((a,b) => {
+    const ka = a.sortKey || a.label;
+    const kb = b.sortKey || b.label;
+    return ka < kb ? -1 : ka > kb ? 1 : 0;
+  });
+
+  const labels   = sorted.map(r => r.label);
+  const actuals  = sorted.map(r => r.actual);
+  const planneds = sorted.map(r => r.planned);
+
+  if (chartInst) { chartInst.destroy(); chartInst = null; }
+
+  const ctx = document.getElementById('avpChart').getContext('2d');
+  chartInst = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Actual Hours',
+          data: actuals,
+          borderColor: actualCol,
+          backgroundColor: actualCol + '28',
+          borderWidth: 2.5,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          fill: false,
+          tension: 0.35
+        },
+        {
+          label: 'Planned Hours',
+          data: planneds,
+          borderColor: plannedCol,
+          backgroundColor: plannedCol + '18',
+          borderWidth: 2,
+          borderDash: [6, 4],
+          pointRadius: 3,
+          pointHoverRadius: 5,
+          fill: false,
+          tension: 0.35
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          display: false
+        },
+        tooltip: {
+          backgroundColor: isDark ? 'rgba(20,28,60,.95)' : 'rgba(255,255,255,.97)',
+          borderColor: isDark ? 'rgba(255,255,255,.12)' : 'rgba(0,0,0,.10)',
+          borderWidth: 1,
+          titleColor: isDark ? '#e7ecff' : '#1a2142',
+          bodyColor: isDark ? '#a7b1d6' : '#5c6690',
+          padding: 12,
+          callbacks: {
+            label: ctx => {
+              const val = ctx.parsed.y;
+              const other = ctx.datasetIndex === 0
+                ? ctx.chart.data.datasets[1].data[ctx.dataIndex]
+                : ctx.chart.data.datasets[0].data[ctx.dataIndex];
+              const variance = ctx.datasetIndex === 0 ? val - other : other - val;
+              const pct = other > 0 ? (val / other * 100).toFixed(1) : '—';
+              const varStr = ctx.datasetIndex === 0
+                ? `  Variance: ${variance >= 0 ? '+' : ''}${Math.round(variance).toLocaleString()} hrs (${pct}% of plan)`
+                : '';
+              return [`  ${ctx.dataset.label}: ${Math.round(val).toLocaleString()} hrs`, varStr].filter(Boolean);
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { color: textCol, font: { size: 11 }, maxRotation: 45 },
+          grid:  { color: gridCol }
+        },
+        y: {
+          ticks: {
+            color: textCol,
+            font: { size: 11 },
+            callback: v => Math.round(v).toLocaleString()
+          },
+          grid: { color: gridCol }
+        }
+      }
+    }
+  });
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+function fmt(n)  { return Math.round(n).toLocaleString(); }
+function esc(s)  { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+</script>
+</body>
+</html>

@@ -7,24 +7,24 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   <style>
     /* ── Flash prevention ─────────────────────────────────── */
-    html { background: #000; }
+    html { background: #080e1c; }
     html[data-theme="light"] { background: #f0f4ff; }
 
     /* ── Design tokens ───────────────────────────────────── */
     :root {
-      --bg:        #0b1020;
+      --bg:        #080e1c;
       --surface:   rgba(255,255,255,.055);
       --surface2:  rgba(255,255,255,.03);
       --border:    rgba(255,255,255,.08);
       --text:      #e7ecff;
       --muted:     #a7b1d6;
-      --btn:       #2d6bff;
-      --btn2:      #1a4fd6;
+      --btn:       #5a9fc2;
+      --btn2:      #3d7fa0;
       --actual:    #5a9fc2;
-      --planned:   #9b8fff;
-      --good:      #1fe3a5;
-      --warn:      #ffcc66;
-      --bad:       #ff6b6b;
+      --planned:   #8b5cf6;
+      --good:      #10b981;
+      --warn:      #f59e0b;
+      --bad:       #ef4444;
     }
     [data-theme="light"] {
       --bg:        #f0f4ff;
@@ -33,29 +33,29 @@
       --border:    rgba(0,0,0,.09);
       --text:      #1a2142;
       --muted:     #5c6690;
-      --btn:       #2d6bff;
-      --btn2:      #1a4fd6;
-      --actual:    #1a6e94;
-      --planned:   #6b55d9;
-      --good:      #0ba676;
-      --warn:      #b87d00;
-      --bad:       #d93636;
+      --btn:       #1a7aaa;
+      --btn2:      #0f5a80;
+      --actual:    #1a7aaa;
+      --planned:   #7c3aed;
+      --good:      #059669;
+      --warn:      #d97706;
+      --bad:       #dc2626;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       background:
-        radial-gradient(1200px 700px at 20% 0%,  rgba(45,107,255,.20), transparent 60%),
-        radial-gradient(900px  600px at 80% 10%, rgba(90,159,194,.14), transparent 60%),
+        radial-gradient(1200px 700px at 20% 0%,  rgba(90,159,194,.20), transparent 60%),
+        radial-gradient(900px  600px at 80% 10%, rgba(139,92,246,.14), transparent 60%),
         var(--bg);
       color: var(--text);
       min-height: 100vh;
     }
     [data-theme="light"] body {
       background:
-        radial-gradient(1200px 700px at 20% 0%,  rgba(45,107,255,.07), transparent 60%),
-        radial-gradient(900px  600px at 80% 10%, rgba(90,159,194,.06), transparent 60%),
+        radial-gradient(1200px 700px at 20% 0%,  rgba(90,159,194,.07), transparent 60%),
+        radial-gradient(900px  600px at 80% 10%, rgba(139,92,246,.06), transparent 60%),
         var(--bg);
     }
 
@@ -484,7 +484,7 @@ const MONTH_ORDER = ['January','February','March','April','May','June',
 
 // ── Theme ──────────────────────────────────────────────────────────────────────
 (function initTheme() {
-  const saved = localStorage.getItem('avp_theme') || 'dark';
+  const saved = localStorage.getItem('avp_theme') || 'light';
   setTheme(saved);
 })();
 

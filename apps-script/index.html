@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html data-theme="light">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -7,8 +7,8 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   <style>
     /* ── Flash prevention ─────────────────────────────────── */
-    html { background: #000; }
-    html[data-theme="light"] { background: #f0f4ff; }
+    html { background: #f0f4ff; }
+    html[data-theme="dark"] { background: #000; }
 
     /* ── Design tokens ───────────────────────────────────── */
     :root {
@@ -328,7 +328,7 @@
   </div>
   <div class="topbar-right">
     <button class="icon-btn" id="refreshBtn" onclick="refreshData()">↻ Refresh</button>
-    <button class="icon-btn" id="themeBtn" onclick="toggleTheme()">☀ Light</button>
+    <button class="icon-btn" id="themeBtn" onclick="toggleTheme()">☾ Dark</button>
   </div>
 </div>
 
@@ -484,7 +484,7 @@ const MONTH_ORDER = ['January','February','March','April','May','June',
 
 // ── Theme ──────────────────────────────────────────────────────────────────────
 (function initTheme() {
-  const saved = localStorage.getItem('avp_theme') || 'dark';
+  const saved = localStorage.getItem('avp_theme') || 'light';
   setTheme(saved);
 })();
 
@@ -496,7 +496,7 @@ function setTheme(t) {
   if (chartInst) rebuildChart();
 }
 function toggleTheme() {
-  const cur = document.documentElement.getAttribute('data-theme') || 'dark';
+  const cur = document.documentElement.getAttribute('data-theme') || 'light';
   setTheme(cur === 'dark' ? 'light' : 'dark');
 }
 
@@ -820,7 +820,7 @@ function switchView(view) {
 function rebuildChart() {
   if (!TABLE_DATA.length) return;
 
-  const isDark  = (document.documentElement.getAttribute('data-theme') || 'dark') === 'dark';
+  const isDark  = (document.documentElement.getAttribute('data-theme') || 'light') === 'dark';
   const gridCol = isDark ? 'rgba(255,255,255,.07)' : 'rgba(0,0,0,.07)';
   const textCol = isDark ? '#a7b1d6'               : '#5c6690';
   const actualCol  = getComputedStyle(document.documentElement).getPropertyValue('--actual').trim()  || '#5a9fc2';
